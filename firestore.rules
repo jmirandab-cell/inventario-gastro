@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Funciones de Ayuda ---
+    
+    // Función para obtener el rol del usuario que hace la petición
+    function getUserRole(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid))
+        ? (
+            'role' in get(/databases/$(database)/documents/users/$(uid)).data
+            ? get(/databases/$(database)/documents/users/$(uid)).data.role
+            : 'user_lab'
+          )
+        : 'user_lab';
+    }
+    
+    // Revisa si el usuario está logueado
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    // Revisa si el usuario es un rol específico
+    function isRole(role) {
+      return isAuthed() && getUserRole(request.auth.uid) == role;
+    }
+    
+    // Revisa si es Admin O User de Laboratorio
+    function isLabUser() {
+      return isAuthed() && (isRole('admin') || isRole('user_lab'));
+    }
+
+    // --- Reglas de Collection Group (Para "Actividad Reciente") ---
+    match /{path=**}/reports/{reportId} {
+      allow read: if isAuthed();
+    }
+    match /{path=**}/maintenanceTickets/{ticketId} {
+      allow read: if isAuthed();
+    }
+
+    // --- Reglas de Colecciones Principales ---
+
+    // Colección de Roles
+    match /users/{uid} {
+      allow read: if isAuthed() && request.auth.uid == uid;
+      allow write: if isRole('admin');
+    }
+
+    // --- Reglas de Datos de la App (Todo dentro de /artifacts) ---
+    match /artifacts/{appId}/public/data {
+
+      // Ítems (Equipos, Pipetas, etc.)
+      match /items/{itemId} {
+        allow read: if isAuthed();
+        allow create, update: if isLabUser(); 
+        allow delete: if false; 
+      }
+      
+      // Subcolecciones de Ítems
+      match /items/{itemId}/{subcollection}/{docId} {
+        allow read: if isAuthed();
+        allow create, update: if isLabUser();
+        allow delete: if isLabUser();
+      }
+
+      // Lotes de Calibración
+      match /calibrationBatches/{batchId} {
+        allow read, create, update: if isLabUser();
+        allow delete: if isRole('admin'); 
+      }
+
+      // Configuración
+      match /settings/config {
+        allow read: if isAuthed();
+        allow write: if isRole('admin');
+      }
+
+      // =========================================================
+      // NUEVO: Historial de Auditoría (Audit Logs)
+      // =========================================================
+      match /auditLogs/{logId} {
+        // Permitir CREAR a cualquier usuario autenticado (para registrar acciones)
+        allow create: if isAuthed();
+        
+        // Permitir LEER a cualquier usuario autenticado (para ver el historial)
+        allow read: if isAuthed();
+        
+        // PROHIBIDO modificar o borrar registros (El historial es sagrado)
+        allow update, delete: if false;
+      }
+      // =========================================================
+    }
+  }
+}
