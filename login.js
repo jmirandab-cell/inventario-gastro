@@ -4,7 +4,7 @@
 
 // 1. Importamos la conexión central y las funciones de Firebase
 import { auth } from "./config.js"; 
-import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // 2. Control de Logs (para que no ensucie la consola en producción)
 const DEBUG = false;

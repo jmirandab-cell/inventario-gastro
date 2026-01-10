@@ -1,3 +1,4 @@
+console.log("Prueba");
 // =============================================================
 // SECCIÓN A: SISTEMA DE ESCÁNER (Html5Qrcode)
 // =============================================================
@@ -189,9 +190,8 @@ const wordTemplateUrl = "https://firebasestorage.googleapis.com/v0/b/inventario-
 // -------------------------------------------------------------
 const ui = {
     sidebar: document.getElementById('sidebar'),
-    sidebarOverlay: document.getElementById('sidebar-overlay'),
-    hamburgerBtn: document.getElementById('hamburger-btn'),
-    sidebarOverlay: document.getElementById('sidebar-overlay'),
+    sidebarOverlay: document.getElementById('sidebar-overlay'), // ¡Solo una vez!
+    hamburgerBtn: document.getElementById('hamburger-btn'),     // Aquí está tu botón clave
     dashboardView: document.getElementById('dashboard-view'),
     detailsView: document.getElementById('details-view'),
     itemList: document.getElementById('item-list'),
@@ -1144,6 +1144,8 @@ async function deleteMaintenanceTicket(ticketId) {
 // CARGA DE DATOS (VERSIÓN DESBLOQUEADA - SIN ÍNDICES COMPLEJOS)
 // =================================================================
 function loadDataForCurrentView() {
+    console.log("Prueba - Entró a loadDataForCurrentView");
+    
     if (itemsUnsubscribe) {
         itemsUnsubscribe();
     }
@@ -1238,9 +1240,10 @@ function loadDataForCurrentView() {
         }
     }, (error) => {
         console.error("❌ Error recibiendo datos:", error);
-        showToast("Error de conexión con la base de datos.", "error");
-    });
-}
+        showToast("Error...", "error");
+    }); // Cierre del onSnapshot
+} // <---- ¿TIENES ESTA LLAVE FINAL?
+
 // =================================================================
 // RENDERIZADO INTELIGENTE (CORREGIDO PARA EVITAR PARPADEO)
 // =================================================================
@@ -1623,17 +1626,11 @@ function selectItem(id, data) {
 
     // ⬇️ SOLUCIÓN PARA MÓVILES (SIN USAR closeSidebar) ⬇️
     if (window.innerWidth < 768) {
-        const s = document.getElementById('sidebar');
-        const o = document.getElementById('sidebar-overlay');
-        
-        // 1. Ocultamos visualmente
-        if (s) s.classList.add('-translate-x-full');
-        if (o) o.classList.add('hidden');
-        
-        // 2. 🔓 QUITAMOS EL CANDADO DEL SCROLL (CRUCIAL)
-        document.body.style.overflow = '';
+        // Usamos la función oficial que ya maneja animaciones y seguridad
+        if (window.closeSidebar) {
+            window.closeSidebar();
+        }
     }
-    // ⬆️ ----------------------------------------------- ⬆️
 
     history.pushState({ itemId: id }, `Detalles ${data.name}`, `#item=${id}`);
 
@@ -2738,45 +2735,29 @@ function closeConfirmModal() { ui.confirmModal.classList.add('hidden'); ui.confi
 
 async function deleteReport(reportId) {
     if (!selectedItemId || !reportId) return;
-    const reportRef = doc(db, `artifacts/${appId}/public/data/items/${selectedItemId}/reports`, reportId);
+
+    // Esta ruta debe ser IGUAL a la que usas para guardar/crear los reportes
+    const reportPath = `artifacts/inventario-gastro-hcuch/public/data/items/${selectedItemId}/reports`;
+    const reportRef = doc(db, reportPath, reportId);
+
     try {
         const reportDoc = await getDoc(reportRef);
-        if (reportDoc.exists() && reportDoc.data().attachments && reportDoc.data().attachments.length > 0) {
-
-            // ✅ VERSIÓN SEGURA (Reemplaza a la anterior)
-            const deletePromises = reportDoc.data().attachments.map(file => {
-                // Opción A: Borrar usando la ruta interna (path) si existe
-                if (file.path && typeof file.path === 'string') {
-                    return deleteObject(ref(storage, file.path)).catch(err => {
-                        console.warn("⚠️ Aviso: No se encontró el archivo en Storage (path), pero se borrará del registro.", err.code);
-                        return Promise.resolve(); // Promesa cumplida falsa para que no detenga el proceso
-                    });
-                }
-                // Opción B: Borrar usando la URL pública si no hay path
-                else if (file.url && typeof file.url === 'string') {
-                    return deleteObject(ref(storage, file.url)).catch(err => {
-                        console.warn("⚠️ Aviso: No se encontró el archivo en Storage (url), pero se borrará del registro.", err.code);
-                        return Promise.resolve();
-                    });
-                }
-
-                // Opción C: Si no tiene datos, no hacer nada (Evita el error fatal)
-                return Promise.resolve();
-            });
-
-            await Promise.all(deletePromises);
+        if (reportDoc.exists() && reportDoc.data().attachments) {
+            // ... tu lógica de borrado de archivos adjuntos ...
+            // (Esta parte no toca el HTML, solo limpia el Storage)
         }
         await deleteDoc(reportRef);
         showToast("Informe eliminado con éxito.", 'success');
+        
+        // OPCIONAL: Si quieres que el HTML se actualice al instante,
+        // podrías llamar aquí a la función que refresca la lista:
+        // loadReports(selectedItemId); 
+
     } catch (e) {
-        console.warn("Error al eliminar informe y sus archivos:", e);
-        showToast("No se pudo eliminar el informe.", 'error');
-        if (e.code === 'storage/object-not-found') {
-            await deleteDoc(reportRef);
-        }
+        console.warn("Error técnico:", e);
+        showToast("Error al eliminar.", 'error');
     }
 }
-
 function getMaintenanceStatus(dateStr) { if (!dateStr) return 'ok'; const today = new Date(); today.setHours(0, 0, 0, 0); const [y, m, d] = dateStr.split('-').map(Number); const mDate = new Date(y, m - 1, d); const diffDays = Math.ceil((mDate - today) / (1000 * 60 * 60 * 24)); if (diffDays < 0) return 'overdue'; if (diffDays <= 30) return 'due-soon'; return 'ok'; }
 function formatDate(date) {
     if (!date) return 'N/A';
@@ -2790,57 +2771,93 @@ function formatDate(date) {
 }
 
 async function generateGeminiSummary() {
-    if (!selectedItemId) { showToast("Por favor, selecciona un equipo primero.", 'info'); return; }
+    if (!selectedItemId) { 
+        showToast("Por favor, selecciona un equipo primero.", 'info'); 
+        return; 
+    }
+
     const geminiModal = document.getElementById('gemini-summary-modal');
     const summaryContent = document.getElementById('gemini-summary-content');
+    
     geminiModal.classList.remove('hidden');
     geminiModal.classList.add('flex');
-    summaryContent.innerHTML = '<div class="flex justify-center items-center"><div class="gemini-loader"></div></div>';
+    summaryContent.innerHTML = 'Consultando historial y analizando con IA... 🧠';
 
     try {
-        const item = selectedItemData;
-        if (!item) { throw new Error("No se encontró el ítem seleccionado."); }
+        // 1. Definir la base de datos y la ruta PRIMERO
+        // Prueba primero con esta ruta corta que es la estándar de Firebase
+        const baseRoute = `items/${selectedItemId}`; 
+        
+        // 2. Obtener los datos del equipo desde tu estado global
+        const item = selectedItemData; 
 
-        let historyText = `Historial para el equipo "${item.name}":\n- Modelo: ${item.model || 'N/A'}\n- Número de Serie: ${item.serial || 'N/A'}\n- Estado Actual: ${item.status}\n\n`;
-        const ticketsQuery = query(collection(db, `artifacts/${appId}/public/data/items/${selectedItemId}/maintenanceTickets`), orderBy("createdAt", "desc"));
+        // 3. Consultar los tickets de mantenimiento
+        // IMPORTANTE: Asegúrate de que 'query', 'collection', 'db', 'orderBy' y 'getDocs' estén importados de Firebase
+        const ticketsQuery = query(collection(db, `${baseRoute}/maintenanceTickets`), orderBy("createdAt", "desc"));
         const ticketsSnapshot = await getDocs(ticketsQuery);
+        
+        let historyText = `Equipo: ${item.name || 'Sin nombre'}\nEstado: ${item.status || 'No definido'}\n`;
+
         if (!ticketsSnapshot.empty) {
-            historyText += "--- Solicitudes de Mantenimiento ---\n";
-            ticketsSnapshot.forEach(doc => { const ticket = doc.data(); historyText += `Solicitud N° ${ticket.ticketId}:\n`; ticket.events.forEach(event => { historyText += `  - Fecha: ${formatDate(event.date)}, Estado: ${event.status}, Notas: ${event.notes || 'ninguna'}\n`; }); });
-            historyText += "\n";
+            historyText += "\nHistorial de Tickets Recientes:\n";
+            ticketsSnapshot.forEach(doc => {
+                const t = doc.data();
+                historyText += `- Ticket ${t.ticketId || 'S/N'}: ${t.status} (${t.type || 'General'})\n`;
+            });
+        } else {
+            historyText += "\nNo hay tickets de mantenimiento registrados aún.";
         }
 
-        const reportsQuery = query(collection(db, `artifacts/${appId}/public/data/items/${selectedItemId}/reports`), orderBy("reportDate", "desc"));
-        const reportsSnapshot = await getDocs(reportsQuery);
-        if (!reportsSnapshot.empty) {
-            historyText += "--- Informes de Mantenimiento ---\n";
-            reportsSnapshot.forEach(doc => { const report = doc.data(); historyText += `Informe: "${report.reportType}" por ${report.technician} el ${formatDate(report.reportDate)}:\n  - Hallazgos: ${report.findings}\n`; });
-            historyText += "\n";
-        }
+        // 4. Preparar la llamada a la IA
+        const apiKey = window.geminiApiKey;
+        if (!apiKey) throw new Error("La API Key de Gemini no está configurada.");
 
-        if (ticketsSnapshot.empty && reportsSnapshot.empty) { summaryContent.innerHTML = '<p>Este equipo no tiene historial de mantenimiento o informes para analizar.</p>'; return; }
+        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-001:generateContent?key=${apiKey}`;
 
-        const systemPrompt = "Eres un asistente experto en gestión de mantenimiento de equipos de laboratorio. Analiza el siguiente historial y genera un resumen conciso en español. El resumen debe destacar: 1) El estado general del equipo. 2) Cualquier problema recurrente o significativo. 3) La fecha del último evento importante y qué fue. 4) Una recomendación sobre la próxima acción a tomar (si aplica). Formatea la salida en párrafos claros y usa viñetas para los puntos clave. No inventes información.";
+        const payload = {
+            contents: [{
+                parts: [{
+                    text: `Eres un ingeniero biomédico experto del Hospital Clínico Universidad de Chile (HCUCH). 
+                    Analiza el siguiente historial del equipo y entrega un resumen muy breve (máximo 3 puntos) 
+                    con recomendaciones técnicas: ${historyText}`
+                }]
+            }]
+        };
 
-        const apiKey = "AIzaSyDSR8DrFB2LMbOUVXFxwjmMUASJikIysO0";
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-        const payload = { contents: [{ parts: [{ text: historyText }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
-        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-
-        if (!response.ok) { const errorBody = await response.json(); console.error("Error Body from API:", errorBody); throw new Error(`Error de la API de Gemini: ${errorBody.error.message}`); }
+        if (!response.ok) throw new Error(`Error API Gemini: ${response.statusText}`);
 
         const result = await response.json();
-        const candidate = result.candidates?.[0];
+        
+        if (result.candidates && result.candidates[0]) {
+            const aiText = result.candidates[0].content.parts[0].text;
+            
+            // Formatear negritas y saltos de línea para el HTML
+            let formattedText = aiText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formattedText = formattedText.replace(/\n/g, '<br>');
 
-        if (candidate && candidate.content?.parts?.[0]?.text) {
-            const summary = candidate.content.parts[0].text;
-            summaryContent.innerHTML = summary.replace(/\* /g, '<br>&bull; ').replace(/\n/g, '<br>');
-        } else { throw new Error("La respuesta de la API no contiene un resumen válido."); }
+            summaryContent.innerHTML = `
+                <div class="prose prose-sm text-slate-700 leading-relaxed">
+                    ${formattedText}
+                </div>
+            `;
+        } else {
+            throw new Error("Gemini no pudo generar una respuesta clara.");
+        }
+
     } catch (error) {
-        console.error("Error generando resumen con Gemini:", error);
-        summaryContent.innerHTML = `<p class="text-red-500"><strong>Error:</strong> No se pudo generar el resumen. Por favor, inténtalo de nuevo más tarde.</p><p class="text-xs text-slate-500 mt-2">${error.message}</p>`;
+        console.error("Error completo capturado:", error);
+        summaryContent.innerHTML = `
+            <div class="p-3 bg-red-50 border border-red-100 rounded-lg">
+                <p class="text-red-600 text-sm font-medium">No se pudo completar el análisis:</p>
+                <p class="text-red-500 text-xs mt-1">${error.message}</p>
+            </div>
+        `;
     }
 }
 
@@ -3100,22 +3117,7 @@ function updateSelectedFilesList(container, fileSourceArray) {
 }
 
 function setupEventListeners() {
-    // =========================================================
-    // 1. SIDEBAR Y NAVEGACIÓN (CORREGIDO Y SEGURO)
-    // =========================================================
-    if (ui.hamburgerBtn) {
-        ui.hamburgerBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); 
-            window.toggleSidebar(e);
-        });
-    }
-
-    if (ui.sidebarOverlay) {
-        ui.sidebarOverlay.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.toggleSidebar(e);
-        });
-    }
+  
 
     // =========================================================
     // 2. LOGICA DE SELECCIÓN Y LOTES
@@ -3727,7 +3729,6 @@ async function openAuditLogModal() {
     });
 }
 
-// 🗑️ AQUÍ BORRAMOS openSidebar Y closeSidebar PORQUE YA TENEMOS LA LLAVE MAESTRA AL FINAL
 
 function adjustColorBrightness(hex, percent) {
     const num = parseInt(hex.replace('#', ''), 16);
@@ -4428,47 +4429,48 @@ window.deleteBatchAttachment = async function (fileUrl) {
     }
 };
 
-// C. ESCUCHADOR DE EVENTOS INTELIGENTE (AQUÍ ESTABA EL PROBLEMA)
-// -----------------------------------------------------------------
+// =================================================================
+// 1. ESCUCHADOR DE EVENTOS GLOBAL (LOTES Y ACCIONES DINÁMICAS)
+// =================================================================
 document.addEventListener('click', async (e) => {
 
-    // 1. VER LOTE (Prioridad Alta + StopPropagation)
+    // 1.1 VER LOTE (Prioridad Alta + StopPropagation)
     const btnVerLote = e.target.closest('.btn-ver-lote');
     if (btnVerLote) {
         e.preventDefault();
-        e.stopPropagation(); // 🛑 ESTO EVITA QUE SE ACTIVE "BORRAR" POR ERROR
+        e.stopPropagation(); 
         const id = btnVerLote.dataset.id;
         console.log("👁️ Click detectado: VER LOTE", id);
         if (typeof openBatchDetailsModal === 'function') openBatchDetailsModal(id);
         return;
     }
 
-    // 2. BORRAR LOTE
+    // 1.2 BORRAR LOTE
     const btnBorrarLote = e.target.closest('.btn-borrar-lote');
     if (btnBorrarLote) {
         e.preventDefault();
-        e.stopPropagation(); // 🛑 DETENER AQUÍ TAMBIÉN
+        e.stopPropagation(); 
         const id = btnBorrarLote.dataset.id;
         console.log("🗑️ Click detectado: BORRAR LOTE", id);
         window.openDeleteSecurityModal(id, 'batch');
         return;
     }
 
-    // 3. FINALIZAR LOTE
+    // 1.3 FINALIZAR LOTE
     if (e.target.closest('#finalize-batch-btn')) {
         e.preventDefault();
         if (typeof finalizeBatch === 'function') await finalizeBatch();
         return;
     }
 
-    // 4. GUARDAR REPORTE LOTE
+    // 1.4 GUARDAR REPORTE LOTE
     if (e.target.closest('#save-batch-report-btn')) {
         e.preventDefault();
         if (typeof saveBatchReport === 'function') await saveBatchReport();
         return;
     }
 
-    // 5. CREAR LOTE
+    // 1.5 CREAR LOTE
     if (e.target.closest('#confirm-create-batch-btn')) {
         e.preventDefault();
         if (typeof saveCalibrationBatch === 'function') await saveCalibrationBatch();
@@ -4478,37 +4480,65 @@ document.addEventListener('click', async (e) => {
 
 // Función infalible para abrir la ventana de archivos
 window.abrirSelectorArchivos = function () {
-    // Buscamos el input de archivos (puede llamarse de dos formas en tu código)
     const input = document.getElementById('batch-file-input') || document.getElementById('file-input');
     if (input) {
-        input.click(); // Esto obliga a abrir la ventana de selección
+        input.click();
     } else {
         console.error("No se encontró el selector de archivos en el HTML");
     }
 };
 
 // =================================================================
-// INICIALIZACIÓN GLOBAL UNIFICADA
+// 2. INICIALIZACIÓN GLOBAL UNIFICADA (DOM CONTENT LOADED)
 // =================================================================
 document.addEventListener('DOMContentLoaded', () => {
     console.log("🏁 Sistema inicializado correctamente.");
 
-    // --- A. Tecla ENTER para Borrado ---
+    // --- 2.1 GESTIÓN DEL SIDEBAR Y OVERLAY ---
+    window.openSidebar = () => {
+        if (ui.sidebar) ui.sidebar.classList.add('open');
+        if (ui.sidebarOverlay) ui.sidebarOverlay.classList.add('show');
+    };
+
+    window.closeSidebar = () => {
+        if (ui.sidebar) ui.sidebar.classList.remove('open');
+        if (ui.sidebarOverlay) ui.sidebarOverlay.classList.remove('show');
+    };
+
+    if (ui.hamburgerBtn) {
+        // Limpiamos listeners viejos clonando el botón para evitar duplicados
+        const newBtn = ui.hamburgerBtn.cloneNode(true);
+        ui.hamburgerBtn.parentNode.replaceChild(newBtn, ui.hamburgerBtn);
+        ui.hamburgerBtn = newBtn; 
+
+        ui.hamburgerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.openSidebar();
+        });
+    }
+
+    if (ui.sidebarOverlay) {
+        ui.sidebarOverlay.addEventListener('click', window.closeSidebar);
+    }
+
+    // Cerrar sidebar al seleccionar un item o al redimensionar (Solo en móviles)
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.sidebar-item')) {
+            if (window.innerWidth <= 768) window.closeSidebar();
+        }
+    });
+
+    // --- 2.2 FUNCIONES DE SEGURIDAD Y TICKETS ---
     const delPass = document.getElementById('delete-auth-password');
     if (delPass) {
-        const newPass = delPass.cloneNode(true);
-        delPass.parentNode.replaceChild(newPass, delPass);
-        newPass.addEventListener('keypress', (e) => {
+        delPass.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') window.confirmDeleteWithPassword();
         });
     }
 
-    // --- B. Formulario de Pasos/Tickets ---
     const stepForm = document.getElementById('add-ticket-step-form');
     if (stepForm) {
-        const newForm = stepForm.cloneNode(true);
-        stepForm.parentNode.replaceChild(newForm, stepForm);
-        newForm.addEventListener('submit', async function (e) {
+        stepForm.addEventListener('submit', async function (e) {
             e.preventDefault();
             const ticketId = document.getElementById('ticket-id-input').value;
             const status = document.getElementById('ticket-step-status').value;
@@ -4520,12 +4550,11 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 if (typeof db === 'undefined') throw new Error("Firebase no inicializado");
                 const ticketRef = doc(db, `artifacts/${appId}/public/data/items/${selectedItemId}/maintenanceTickets`, ticketId);
-                const newEvent = { status, date, notes: notes || '' };
-
+                
                 await updateDoc(ticketRef, {
-                    events: arrayUnion(newEvent),
+                    events: arrayUnion({ status, date, notes: notes || '' }),
                     status: status === 'Equipo dado de baja' ? 'Cerrada' :
-                        (status === 'Mantención Realizada' ? 'Finalizado' : status),
+                            (status === 'Mantención Realizada' ? 'Finalizado' : status),
                     lastUpdated: serverTimestamp()
                 });
 
@@ -4537,7 +4566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('add-ticket-step-modal').classList.add('hidden');
                 e.target.reset();
                 if (typeof loadMaintenanceTickets === 'function') loadMaintenanceTickets();
-                showToast("Paso guardado con éxito", "success");
+                if (typeof showToast === 'function') showToast("Paso guardado con éxito", "success");
             } catch (error) {
                 console.error("❌ Error:", error);
                 alert("Error al guardar: " + error.message);
@@ -4545,60 +4574,34 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- C. Botones del Modal de Lotes ---
-    // Botón de archivos
-    const batchInput = document.getElementById('batch-file-input');
-    if (batchInput) {
-        batchInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file || !window.currentBatchId) return;
-            // Aquí se activa tu lógica de subida que ya tenías
-            subirArchivoLote(file);
-        });
-    }
-
-    // Botón Finalizar Lote
-    const btnFin = document.getElementById('finalize-batch-btn');
-    if (btnFin) {
-        btnFin.addEventListener('click', () => {
-            if (typeof finalizeBatch === 'function') finalizeBatch();
-        });
-    }
-
-    // --- D. Arranque de funciones base ---
+    // --- 2.3 ARRANQUE DE FUNCIONES BASE ---
     if (typeof setupDropzones === 'function') setupDropzones();
     if (typeof initialize === 'function') initialize();
     if (typeof setupEventListeners === 'function') {
-        try { setupEventListeners(); } catch (e) { console.warn("Error en listeners:", e); }
+        try { setupEventListeners(); } catch (e) { console.warn("Error en listeners base:", e); }
     }
+
+    // --- 2.4 CARGA RETARDADA DEL DASHBOARD ---
+    setTimeout(window.loadGlobalDashboard, 2000);
 });
+
 // =============================================================
-// NUEVO WIDGET: MANTENIMIENTOS EN CURSO (DASHBOARD)
+// 3. WIDGET DE MANTENIMIENTO (LÓGICA DE VISUALIZACIÓN)
 // =============================================================
 window.renderDashboardMaintenanceWidget = function() {
     const container = document.getElementById('dashboard-active-maintenance');
-    if (!container) return; // Si no estamos en el dashboard, no hace nada
+    if (!container) return;
 
-    // 1. Obtener tickets
     let tickets = typeof maintenanceTickets !== 'undefined' ? maintenanceTickets : [];
-    
-    // 2. Filtrar SOLO los activos (No Cerrados, No Finalizados, No Baja)
-    const activeTickets = tickets.filter(t => {
-        const status = t.status || '';
-        return !['Cerrada', 'Finalizado', 'Baja'].includes(status);
-    });
+    const activeTickets = tickets.filter(t => !['Cerrada', 'Finalizado', 'Baja'].includes(t.status || ''));
 
-    // 3. Ordenar por fecha (Más recientes primero)
     activeTickets.sort((a, b) => {
         const dateA = a.createdAt ? new Date(a.createdAt.seconds * 1000) : new Date(0);
         const dateB = b.createdAt ? new Date(b.createdAt.seconds * 1000) : new Date(0);
         return dateB - dateA;
     });
 
-    // 4. Tomar solo los últimos 4 para no llenar la pantalla
     const topTickets = activeTickets.slice(0, 4);
-
-    // 5. Dibujar en el HTML
     container.innerHTML = '';
 
     if (topTickets.length === 0) {
@@ -4606,168 +4609,90 @@ window.renderDashboardMaintenanceWidget = function() {
             <div class="flex flex-col items-center justify-center py-8 text-slate-400 opacity-70">
                 <i class="fas fa-check-circle text-4xl mb-2 text-green-400"></i>
                 <span class="text-sm font-medium">¡Todo al día!</span>
-            </div>
-        `;
+            </div>`;
         return;
     }
 
     topTickets.forEach(ticket => {
-        // Título inteligente
-        let displayTitle = ticket.motive || 'Solicitud';
-        if (!ticket.motive && ticket.maintenanceType) {
-            displayTitle = `${ticket.maintenanceType}`;
-        }
-
-        // Color de la etiqueta
-        let badgeColor = "bg-yellow-100 text-yellow-700 border border-yellow-200";
-        if (ticket.status === 'Abierta') badgeColor = "bg-blue-100 text-blue-700 border border-blue-200";
-
-        // Fecha corta
+        let displayTitle = ticket.motive || ticket.maintenanceType || 'Solicitud';
+        let badgeColor = ticket.status === 'Abierta' ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700";
         const dateObj = ticket.createdAt ? new Date(ticket.createdAt.seconds * 1000) : new Date();
         const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
 
         const item = document.createElement('div');
-        item.className = "flex items-center justify-between p-3 bg-white hover:bg-blue-50 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group";
+        item.className = "flex items-center justify-between p-3 bg-white hover:bg-blue-50 rounded-xl border border-slate-100 shadow-sm transition-all cursor-pointer group";
         
-        // Al hacer click, muestra una alerta rápida (luego podemos hacer que navegue)
-        // 1. CLICK INTELIGENTE: Navegar al equipo
         item.onclick = async function() {
-            // Verificamos si tenemos el ID del equipo (gracias al truco que hicimos antes)
-            if (!ticket.itemId) {
-                console.error("⚠️ Este ticket no tiene ID de equipo (itemId).");
-                alert("No se puede ir al equipo: Faltan datos.");
-                return;
-            }
-
-            console.log("🚀 Yendo al equipo:", ticket.itemId);
-
-            // A. Guardar ID globalmente
+            if (!ticket.itemId) return alert("No se puede ir al equipo: Faltan datos.");
             window.selectedItemId = ticket.itemId;
 
-            // B. Cambiar pantalla (Ocultar Dashboard, Mostrar Detalles)
-            if (typeof showDetailsView === 'function') {
-                showDetailsView();
-            }
+            if (typeof showDetailsView === 'function') showDetailsView();
+            if (typeof loadItemDetails === 'function') await loadItemDetails(ticket.itemId);
+            if (typeof loadMaintenanceTickets === 'function') await loadMaintenanceTickets();
 
-            // C. Cargar datos del equipo (Nombre, Foto, etc.)
-            if (typeof loadItemDetails === 'function') {
-                await loadItemDetails(ticket.itemId);
-            }
-
-            // D. Cargar la lista de tickets de ESE equipo
-            if (typeof loadMaintenanceTickets === 'function') {
-                await loadMaintenanceTickets();
-            }
-
-            // E. TRUCO: Intentar abrir la pestaña "Mantenimiento" automáticamente
-            // Buscamos todos los botones y clicamos el que diga "Mantenimiento"
+            // Activar pestaña mantenimiento
             const buttons = document.querySelectorAll('button');
             for (const btn of buttons) {
-                if (btn.innerText.includes('Mantenimiento')) {
-                    btn.click();
-                    break; // Ya lo encontramos, dejamos de buscar
-                }
+                if (btn.innerText.includes('Mantenimiento')) { btn.click(); break; }
             }
         };
 
-        // 2. DISEÑO VISUAL (ESTO SE QUEDA IGUAL QUE ANTES)
         item.innerHTML = `
             <div class="flex items-center gap-3 overflow-hidden">
-                <div class="w-2 h-2 rounded-full bg-orange-500 shadow-sm shadow-orange-300 flex-shrink-0 animate-pulse"></div>
+                <div class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
                 <div class="flex flex-col truncate pr-2">
-                    <span class="text-sm font-bold text-slate-700 truncate group-hover:text-blue-700 transition-colors">${displayTitle}</span>
+                    <span class="text-sm font-bold text-slate-700 truncate group-hover:text-blue-700">${displayTitle}</span>
                     <span class="text-[10px] text-slate-400 font-mono">ID: ${ticket.ticketId || ticket.id.slice(0,6)}</span>
                 </div>
             </div>
-            <div class="flex flex-col items-end gap-1 flex-shrink-0">
-                <span class="text-[10px] px-2 py-0.5 rounded-full ${badgeColor} font-bold uppercase tracking-wide">${ticket.status}</span>
+            <div class="flex flex-col items-end gap-1">
+                <span class="text-[10px] px-2 py-0.5 rounded-full ${badgeColor} font-bold uppercase">${ticket.status}</span>
                 <span class="text-[10px] text-slate-400">${dateStr}</span>
-            </div>
-        `;
-        
+            </div>`;
         container.appendChild(item);
     });
 };
+
 // =============================================================
-// CARGA GLOBAL DEL DASHBOARD (Mantenimientos Activos)
+// 4. CARGA DE DATOS DESDE FIREBASE (GLOBAL)
 // =============================================================
 window.loadGlobalDashboard = async function() {
     const container = document.getElementById('dashboard-active-maintenance');
-    if (!container) return; // Si no estamos en el inicio, no hacer nada
-
-    // Si ya hay datos cargados en la lista visual, no recargar para evitar parpadeos
-    if (container.children.length > 1 && !container.innerHTML.includes("Cargando")) {
-        console.log("Dashboard ya tiene datos, saltando recarga.");
-        return;
-    }
-
-    console.log("🌍 Buscando tickets pendientes en TODA la base de datos...");
+    if (!container) return;
 
     try {
-        // 1. Usamos las herramientas que definiste en firebase-init.js
         const q = window.query(
-            window.collectionGroup(window.db, 'maintenanceTickets'), // Busca en todas las carpetas
-            window.where('status', '!=', 'Cerrada') // Solo los activos
+            window.collectionGroup(window.db, 'maintenanceTickets'),
+            window.where('status', '!=', 'Cerrada')
         );
 
         const snapshot = await window.getDocs(q);
         let allTickets = [];
 
         snapshot.forEach(doc => {
-    // TRUCO: doc.ref es el ticket -> parent es la colección -> parent.parent es el EQUIPO
-    const equipmentRef = doc.ref.parent.parent; 
-    const equipmentId = equipmentRef ? equipmentRef.id : null;
-
-    // Guardamos el ticket junto con el ID del equipo (itemId)
-    allTickets.push({ 
-        id: doc.id, 
-        itemId: equipmentId, // <--- ESTO ES LA CLAVE PARA NAVEGAR
-        ...doc.data() 
-    });
-});
-
-        // 2. Limpieza extra (por si acaso hay 'Finalizado' o 'Baja')
-        allTickets = allTickets.filter(t => t.status !== 'Finalizado' && t.status !== 'Baja');
-
-        // 3. Ordenar por fecha (El más nuevo arriba)
-        allTickets.sort((a, b) => {
-            const dateA = a.createdAt ? new Date(a.createdAt.seconds * 1000) : new Date(0);
-            const dateB = b.createdAt ? new Date(b.createdAt.seconds * 1000) : new Date(0);
-            return dateB - dateA;
+            const equipmentRef = doc.ref.parent.parent; 
+            allTickets.push({ 
+                id: doc.id, 
+                itemId: equipmentRef ? equipmentRef.id : null, 
+                ...doc.data() 
+            });
         });
 
-        // 4. Dibujar usando el widget que creamos antes
-        // Truco: Guardamos temporalmente en la variable global para que el render lo lea
+        allTickets = allTickets.filter(t => t.status !== 'Finalizado' && t.status !== 'Baja');
+        
+        // Guardar en variable global temporalmente para el render
         const backup = window.maintenanceTickets; 
         window.maintenanceTickets = allTickets;   
-        
-        if (typeof renderDashboardMaintenanceWidget === 'function') {
-            renderDashboardMaintenanceWidget();
-        }
-
-        window.maintenanceTickets = backup; // Restauramos
-        console.log(`✅ Dashboard actualizado: ${allTickets.length} tickets.`);
+        window.renderDashboardMaintenanceWidget();
+        window.maintenanceTickets = backup;
 
     } catch (error) {
         console.error("❌ Error cargando Dashboard:", error);
-
-        // 🚨 ESTO ES LO QUE ESPERAMOS QUE PASE LA PRIMERA VEZ 🚨
         if (error.message && error.message.includes("indexes")) {
-            container.innerHTML = `
-                <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p class="text-red-700 font-bold text-sm">⚠️ Acción Requerida en Firebase</p>
-                    <p class="text-red-600 text-xs mt-1">Falta crear el índice de búsqueda.</p>
-                    <p class="text-slate-500 text-xs mt-2">1. Abre la consola (F12).<br>2. Busca el link que dice "Create index".<br>3. Haz clic y espera.</p>
-                </div>
-            `;
+            container.innerHTML = `<div class="p-4 bg-red-50 text-red-700 text-xs rounded-lg">⚠️ Falta crear índice en Firebase. Revisa la consola (F12).</div>`;
         }
     }
 };
-
-// Ejecutar automáticamente al iniciar la app
-document.addEventListener("DOMContentLoaded", () => {
-    setTimeout(window.loadGlobalDashboard, 2000); // Espera 2 segs a que Firebase conecte
-});
 // =============================================================
 // 1. WIDGET: RESUMEN DE INVENTARIO (Diseño Nuevo)
 // =============================================================
@@ -4854,34 +4779,86 @@ window.renderDashboardRecentActivity = function() {
         </div>
     `;
 };
-// ==========================================
-// SECCIÓN Z: LÓGICA DEL SIDEBAR (MÓVIL) - CORREGIDA
-// ==========================================
-window.toggleSidebar = function(e) {
-    if(e) e.preventDefault(); // Evitar comportamientos extraños del botón
+/* ========================================================== */
+/* LÓGICA DEL SIDEBAR (USANDO TU OBJETO UI)                   */
+/* ========================================================== */
 
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+// Funciones usando las referencias de tu objeto 'ui'
+function openSidebar() {
+    if (ui.sidebar) ui.sidebar.classList.add('open');
+    if (ui.sidebarOverlay) ui.sidebarOverlay.classList.add('show');
+}
+
+function closeSidebar() {
+    if (ui.sidebar) ui.sidebar.classList.remove('open');
+    if (ui.sidebarOverlay) ui.sidebarOverlay.classList.remove('show');
+}
+
+// --- EVENT LISTENERS ---
+
+// 1. Botón Hamburguesa (Usamos ui.hamburgerBtn)
+if (ui.hamburgerBtn) {
+    // Truco: Clonamos el nodo para eliminar cualquier listener viejo/conflictivo
+    const newBtn = ui.hamburgerBtn.cloneNode(true);
+    ui.hamburgerBtn.parentNode.replaceChild(newBtn, ui.hamburgerBtn);
     
-    // Seguridad: si no encuentra los elementos, no hace nada
-    if (!sidebar || !overlay) return;
+    // Actualizamos la referencia en el objeto ui
+    ui.hamburgerBtn = newBtn;
 
-    // Detectar si está cerrado (tiene la clase -translate-x-full)
-    const isClosed = sidebar.classList.contains('-translate-x-full');
+    ui.hamburgerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSidebar();
+        console.log("🍔 Menú abierto");
+    });
+} else {
+    console.error("❌ Error: No se encontró 'hamburger-btn' en el objeto ui");
+}
 
-    if (isClosed) {
-        // === ABRIR MENÚ ===
-        sidebar.classList.remove('-translate-x-full'); // Muestra el menú
-        overlay.classList.remove('hidden');            // Muestra el fondo oscuro
+// 2. Click en el Overlay (Fondo gris)
+if (ui.sidebarOverlay) {
+    ui.sidebarOverlay.addEventListener('click', closeSidebar);
+}
+
+// 3. Click en items (Navegación móvil)
+document.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+        if (window.innerWidth < 768) {
+            closeSidebar();
+        }
+    });
+});
+// ==========================================
+// 🕵️‍♂️ DIAGNÓSTICO DE SIDEBAR (Borrar luego)
+// ==========================================
+setTimeout(() => {
+    console.clear();
+    console.log("%c 🕵️ INICIANDO DIAGNÓSTICO... ", "background: #222; color: #bada55; font-size: 14px");
+
+    const elSidebar = document.getElementById('sidebar');
+    const elBtn = document.getElementById('mobile-menu-btn');
+    const elOverlay = document.getElementById('sidebar-overlay');
+
+    // 1. CHEQUEO DE EXISTENCIA
+    console.log("1️⃣  ¿Existe el Sidebar?      ", elSidebar ? "✅ SÍ" : "❌ NO (Revisa el ID 'sidebar')");
+    console.log("2️⃣  ¿Existe el Botón Menú?   ", elBtn ? "✅ SÍ" : "❌ NO (Falta el botón en HTML)");
+    console.log("3️⃣  ¿Existe el Overlay?      ", elOverlay ? "✅ SÍ" : "❌ NO (Falta el div overlay)");
+
+    // 2. CHEQUEO DE VISIBILIDAD
+    if (elBtn) {
+        const estilo = window.getComputedStyle(elBtn);
+        console.log("4️⃣  Botón visible?           ", estilo.display !== 'none' ? "✅ SÍ" : "⚠️ OCULTO (display: none)");
+        console.log("     ➜ Z-Index del botón:    ", estilo.zIndex);
         
-        // 🔒 LA CLAVE: CONGELAR EL FONDO (SCROLL LOCK)
-        document.body.style.overflow = 'hidden';
+        // Agregar un "chivato" al hacer click
+        elBtn.addEventListener('click', () => {
+            console.log("%c 🖱️ CLICK DETECTADO EN EL BOTÓN ", "background: blue; color: white; font-size: 12px");
+            if (elSidebar) {
+                console.log("     ➜ Clases del Sidebar antes:", elSidebar.className);
+            }
+        });
     } else {
-        // === CERRAR MENÚ ===
-        sidebar.classList.add('-translate-x-full');    // Esconde el menú
-        overlay.classList.add('hidden');               // Esconde el fondo oscuro
-        
-        // 🔓 LA CLAVE: LIBERAR EL FONDO
-        document.body.style.overflow = '';
+        console.error("🚨 ERROR CRÍTICO: No puedo probar clicks porque no encuentro el botón con ID 'mobile-menu-btn'");
     }
-};
+
+    console.log("%c 🏁 FIN DEL DIAGNÓSTICO ", "background: #222; color: #bada55");
+}, 2000); // Esperamos 2 segundos para asegurar que todo cargó

@@ -1,0 +1,253 @@
+
+Informe Detallado de Código Duplicado
+========================================
+
+Este informe detalla las áreas en `app.js` donde se ha identificado una duplicación significativa de código. La refactorización de estas áreas en funciones más genéricas y reutilizables reducirá la cantidad de código, simplificará el mantenimiento y disminuirá la probabilidad de errores.
+
+---
+
+### 1. Apertura de Modales de Gestión de Archivos
+
+Se han identificado tres funciones distintas que realizan la misma tarea: abrir un modal para gestionar una lista de archivos asociados a un ítem.
+
+**Funciones Implicadas:**
+- `openManualsModal`
+- `openInsertsModal`
+- `openReceptionDocsModal`
+
+**Análisis de Similitudes:**
+
+Todas estas funciones siguen exactamente el mismo patrón:
+1.  Reinician un formulario específico.
+2.  Limpian una matriz de archivos a subir (`manualFilesToUpload`, `insertFilesToUpload`, etc.).
+3.  Limpian la lista de archivos en la interfaz de usuario.
+4.  Iteran sobre una matriz de archivos existentes (`manuals`, `inserts`, `receptionDocuments`).
+5.  Si no hay archivos, muestran un mensaje de "lista vacía".
+6.  Para cada archivo, clonan un template (`manual-item-template`) y llenan los datos.
+7.  Añaden un listener al botón de eliminar, que a su vez llama a otras funciones similares (`deleteManual`, `deleteInsert`, etc.).
+8.  Muestran el modal correspondiente.
+
+**Código para Comparación:**
+
+```javascript
+// Función para abrir el modal de Manuales
+function openManualsModal(manuals = []) {
+    document.getElementById('add-manual-form').reset();
+    manualFilesToUpload = [];
+    document.getElementById('manual-files-list').innerHTML = '';
+    const listEl = document.getElementById('manuals-list');
+    listEl.innerHTML = '';
+    if (manuals.length === 0) {
+        listEl.innerHTML = '<p class="text-slate-400 text-center">No hay manuales para este ítem.</p>';
+    } else {
+        manuals.forEach(manual => {
+            const t = document.getElementById('manual-item-template').content.cloneNode(true);
+            t.querySelector('.manual-name').textContent = manual.name;
+            t.querySelector('.view-manual-btn').href = manual.url;
+            t.querySelector('.delete-manual-btn').addEventListener('click', () => {
+                openPasswordModal(() => {
+                    showConfirmModal('Eliminar Manual', `¿Estás seguro de que quieres eliminar el manual "${manual.name}"?`, () => deleteManual(manual));
+                });
+            });
+            listEl.appendChild(t);
+        });
+    }
+    ui.manualsModal.classList.remove('hidden');
+    ui.manualsModal.classList.add('flex');
+}
+
+// Función para abrir el modal de Insertos
+function openInsertsModal(inserts = []) {
+    document.getElementById('add-insert-form').reset();
+    insertFilesToUpload = [];
+    document.getElementById('insert-files-list').innerHTML = '';
+    const listEl = document.getElementById('inserts-list');
+    listEl.innerHTML = '';
+    if (inserts.length === 0) {
+        listEl.innerHTML = '<p class="text-slate-400 text-center">No hay insertos para este ítem.</p>';
+    } else {
+        inserts.forEach(insert => {
+            const t = document.getElementById('manual-item-template').content.cloneNode(true);
+            t.querySelector('.manual-name').textContent = insert.name;
+            t.querySelector('.view-manual-btn').href = insert.url;
+            t.querySelector('.delete-manual-btn').addEventListener('click', () => {
+                openPasswordModal(() => {
+                    showConfirmModal('Eliminar Inserto', `¿Estás seguro de que quieres eliminar el inserto "${insert.name}"?`, () => deleteInsert(insert));
+                });
+            });
+            listEl.appendChild(t);
+        });
+    }
+    ui.insertsModal.classList.remove('hidden');
+    ui.insertsModal.classList.add('flex');
+}
+```
+
+**Sugerencia de Refactorización:**
+
+Crear una única función genérica que reciba los elementos específicos como parámetros.
+
+```javascript
+function openFileUploadModal(config) {
+    // config.form: ID del formulario
+    // config.fileArray: Referencia al array de archivos a subir (ej. manualFilesToUpload)
+    // config.fileListUI: ID de la lista de archivos a subir en la UI
+    // config.existingListUI: ID de la lista de archivos existentes
+    // config.existingFiles: Array de archivos ya guardados
+    // config.modalElement: Elemento del modal a mostrar
+    // config.templateId: ID del template a usar para la lista
+    // config.deleteCallback: Función a llamar para eliminar un archivo
+    // ... y otros parámetros necesarios
+}
+```
+
+---
+
+### 2. Guardado de Archivos
+
+Al igual que la apertura de modales, las funciones para guardar los diferentes tipos de archivos son casi idénticas.
+
+**Funciones Implicadas:**
+- `saveManual`
+- `saveInsert`
+- `saveReceptionDoc`
+
+**Análisis de Similitudes:**
+
+1.  Verifican que haya un `selectedItemId` y que el array de archivos a subir no esté vacío.
+2.  Ponen un botón de "submit" en estado de carga.
+3.  Usan `Promise.all` para subir todos los archivos seleccionados con la función genérica `uploadFile`, especificando una ruta (`manuals/...`, `inserts/...`).
+4.  Crean un array con los metadatos de los archivos subidos (nombre, URL, path).
+5.  Actualizan el documento del ítem en Firestore usando `arrayUnion` para añadir los nuevos archivos a un campo específico (`manuals`, `inserts`, `receptionDocuments`).
+6.  Muestran un `toast` de éxito, cierran el modal y refrescan la vista del ítem.
+
+**Código para Comparación:**
+
+```javascript
+// Función para guardar manuales
+async function saveManual(event) {
+    event.preventDefault();
+    // ... validación ...
+    const submitBtn = document.getElementById('submit-manual-btn');
+    setButtonLoading(submitBtn, true, 'Subir Manuales');
+
+    try {
+        const uploadPromises = manualFilesToUpload.map(file =>
+            uploadFile(file, `manuals/${selectedItemId}/${Date.now()}_${file.name}`)
+        );
+        const uploadedFiles = await Promise.all(uploadPromises);
+        const newManuals = uploadedFiles.map(file => ({
+            name: file.name, url: file.downloadURL, path: file.filePath, createdAt: new Date()
+        }));
+        const itemRef = doc(db, `artifacts/${appId}/public/data/items`, selectedItemId);
+        await updateDoc(itemRef, { manuals: arrayUnion(...newManuals) });
+        showToast(`Se subieron ${uploadedFiles.length} manual(es) con éxito.`, 'success');
+        // ... cerrar modal y refrescar ...
+    } catch (error) { // ... manejo de error ... 
+    } finally { // ... restaurar botón ... 
+    }
+}
+
+// Función para guardar insertos
+async function saveInsert(event) {
+    event.preventDefault();
+    // ... validación ...
+    const submitBtn = document.getElementById('submit-insert-btn');
+    setButtonLoading(submitBtn, true, 'Subir Insertos');
+
+    try {
+        const uploadPromises = insertFilesToUpload.map(file =>
+            uploadFile(file, `inserts/${selectedItemId}/${Date.now()}_${file.name}`)
+        );
+        const uploadedFiles = await Promise.all(uploadPromises);
+        const newInserts = uploadedFiles.map(file => ({
+            name: file.name, url: file.downloadURL, path: file.filePath, createdAt: new Date()
+        }));
+        const itemRef = doc(db, `artifacts/${appId}/public/data/items`, selectedItemId);
+        await updateDoc(itemRef, { inserts: arrayUnion(...newInserts) });
+        showToast(`Se subieron ${uploadedFiles.length} inserto(s) con éxito.`, 'success');
+        // ... cerrar modal y refrescar ...
+    } catch (error) { // ... manejo de error ...
+    } finally { // ... restaurar botón ...
+    }
+}
+```
+
+**Sugerencia de Refactorización:**
+
+Una función genérica que maneje el proceso de guardado.
+
+```javascript
+async function saveFiles(config) {
+    // config.event: el evento del formulario
+    // config.filesToUpload: El array de archivos a subir
+    // config.uploadPath: La ruta base en Storage (ej. 'manuals')
+    // config.firestoreField: El campo en Firestore a actualizar (ej. 'manuals')
+    // config.submitBtnId: ID del botón de submit
+    // config.modalElement: El elemento del modal a cerrar
+    // ...
+}
+```
+
+---
+
+### 3. Eliminación de Archivos
+
+Finalmente, las funciones para eliminar un archivo individual también están duplicadas.
+
+**Funciones Implicadas:**
+- `deleteManual`
+- `deleteInsert`
+- `deleteReceptionDoc`
+
+**Análisis de Similitudes:**
+
+1.  Verifican la existencia de `selectedItemId`.
+2.  Eliminan el archivo de Firebase Storage usando `deleteObject` y la ruta del archivo (`manual.path`).
+3.  Actualizan el documento del ítem en Firestore usando `arrayRemove` para quitar el objeto del archivo del array correspondiente.
+4.  Muestran un `toast` de éxito.
+5.  (Algunas) Refrescan la interfaz de usuario para que el cambio sea visible.
+
+**Código para Comparación:**
+
+```javascript
+// Función para eliminar un manual
+async function deleteManual(manual) {
+    if (!selectedItemId) return;
+    try {
+        await deleteObject(ref(storage, manual.path));
+        const itemRef = doc(db, `artifacts/${appId}/public/data/items`, selectedItemId);
+        await updateDoc(itemRef, { manuals: arrayRemove(manual) });
+        showToast("Manual eliminado con éxito.", 'success');
+        // ... lógica de actualización de UI ...
+    } catch (error) {
+        console.error("Error eliminando manual:", error);
+        showToast("No se pudo eliminar el manual.", 'error');
+    }
+}
+
+// Función para eliminar un inserto
+async function deleteInsert(insert) {
+    if (!selectedItemId) return;
+    try {
+        await deleteObject(ref(storage, insert.path));
+        const itemRef = doc(db, `artifacts/${appId}/public/data/items`, selectedItemId);
+        await updateDoc(itemRef, { inserts: arrayRemove(insert) });
+        showToast("Inserto eliminado con éxito.", 'success');
+    } catch (error) {
+        console.error("Error eliminando inserto:", error);
+        showToast("No se pudo eliminar el inserto.", 'error');
+    }
+}
+```
+
+**Sugerencia de Refactorización:**
+
+Una única función que tome el objeto del archivo y el campo de Firestore a modificar.
+
+```javascript
+async function deleteAttachedFile(fileObject, firestoreField) {
+    // fileObject: El objeto que contiene 'path' y otros datos del archivo.
+    // firestoreField: El nombre del campo array en Firestore (ej. 'manuals').
+}
+```

@@ -1,38 +1,32 @@
 // =================================================================
-// ARCHIVO: firebase-init.js (VERSIÓN CON ARRAY TOOLS)
+// ARCHIVO: firebase-init.js (Capa de Compatibilidad)
 // =================================================================
+// Este archivo ahora importa la configuración central desde config.js
+// y sigue exportando las funciones de Firebase al objeto 'window'
+// para mantener la compatibilidad con el resto de la aplicación.
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-// 👇 AGREGAMOS arrayUnion, arrayRemove e increment 👇
-import { 
-    getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, setDoc, 
+import { db, auth, storage } from './config.js'; // <- ¡IMPORTANTE!
+
+import {
+    collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, setDoc,
     query, where, orderBy, limit, serverTimestamp, collectionGroup, writeBatch, runTransaction, onSnapshot,
     arrayUnion, arrayRemove, increment
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { 
-    getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, 
-    GoogleAuthProvider, signInWithPopup 
+import {
+    onAuthStateChanged, signOut, signInWithEmailAndPassword,
+    GoogleAuthProvider, signInWithPopup
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { 
-    getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject 
+import {
+    ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
-const firebaseConfig = {
-    apiKey: "AIzaSyBiOXLhDiMpr9zUOwH8NWGJ_YvQ_8y-_Hs",
-    authDomain: "inventario-gastro-hcuch.firebaseapp.com",
-    projectId: "inventario-gastro-hcuch",
-    storageBucket: "inventario-gastro-hcuch.firebasestorage.app",
-    messagingSenderId: "958769620035",
-    appId: "1:958769620035:web:dfeea27f224376446ea0f6"
-};
+// La configuración y la inicialización de 'app', 'db', 'auth' y 'storage'
+// se han movido a 'config.js'.
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const storage = getStorage(app);
-const appId = "inventario-gastro-hcuch"; 
+// Mantenemos el appId que ahora también lee desde las variables de entorno.
+const appId = import.meta.env.VITE_PROJECT_ID;
 
-// EXPORTAR A WINDOW
+// EXPORTAR A WINDOW (La razón de ser de este archivo)
 window.db = db;
 window.auth = auth;
 window.storage = storage;
@@ -63,7 +57,6 @@ window.collectionGroup = collectionGroup;
 window.writeBatch = writeBatch;
 window.runTransaction = runTransaction;
 window.onSnapshot = onSnapshot;
-// 👇 NUEVAS HERRAMIENTAS 👇
 window.arrayUnion = arrayUnion;
 window.arrayRemove = arrayRemove;
 window.increment = increment;
@@ -75,4 +68,4 @@ window.uploadBytesResumable = uploadBytesResumable;
 window.getDownloadURL = getDownloadURL;
 window.deleteObject = deleteObject;
 
-console.log("✅ Firebase actualizado: Herramientas de Array listas.");
+console.log("✅ Capa de compatibilidad de Firebase lista. Usando config.js centralizado.");
