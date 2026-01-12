@@ -58,70 +58,38 @@ input:focus, select:focus {
     font-size: 16px !important;
 }
 
-/* ========================================================== */
-/* 3. SIDEBAR (CORREGIDO: COMPORTAMIENTO UNIFICADO)           */
-/* ========================================================== */
+/* Sidebar: Comportamiento idéntico en PC y Celular */
 #sidebar {
-    position: fixed; /* CAMBIADO: Ahora flota sobre el contenido */
-    top: 0;
-    left: 0;
-    display: flex;
-    flex-direction: column;
-    width: 280px; /* Un poco más ancho para legibilidad */
-    height: 100vh;
-    background-color: var(--color-bg-surface) !important;
-    border-right: 1px solid var(--color-border-muted);
-    z-index: 100; /* Por encima de todo */
-    
-    /* EFECTO DE ENTRADA/SALIDA */
-    transform: translateX(-100%); 
+    transform: translateX(-100%); /* Siempre escondido al inicio */
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    visibility: hidden;
+    z-index: 100 !important;
 }
 
-/* Cuando JS añade la clase .open (funciona en PC y Móvil) */
+/* Clase que activa el JS al hacer click */
 #sidebar.open {
-    transform: translateX(0);
-    visibility: visible;
+    transform: translateX(0) !important;
 }
 
-#sidebar header, 
-#sidebar .shrink-0 {
-    flex-shrink: 0 !important;
-    background-color: var(--color-bg-surface);
-}
-
-#item-list {
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 20px;
-}
-
-/* ========================================================== */
-/* 4. OVERLAY (CORREGIDO: AHORA SÍ SE VE EN PC)              */
-/* ========================================================== */
+/* Fondo oscuro (Overlay) */
 #sidebar-overlay {
-    display: block !important; /* Quitamos el none para que la transición funcione */
+    display: block !important; /* Permitimos que exista */
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: rgba(15, 23, 42, 0.5);
+    background-color: rgba(15, 23, 42, 0.5); /* Color oscuro transparente */
     backdrop-filter: blur(4px);
-    z-index: 90; /* Justo debajo del sidebar */
-    
-    /* Estado oculto */
-    opacity: 0;
+    z-index: 90 !important;
+    opacity: 0; /* Invisible al inicio */
     visibility: hidden;
     transition: opacity 0.3s ease, visibility 0.3s;
 }
 
-/* Estado visible */
+/* Clase que activa el JS para mostrar el fondo */
 #sidebar-overlay.show {
-    opacity: 1;
-    visibility: visible;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
 /* ========================================================== */
@@ -213,20 +181,26 @@ button, .tab-btn, .sidebar-item { touch-action: manipulation; }
 
 @media (max-width: 768px) {
     #sidebar {
-        position: fixed;
+        position: fixed !important;
         top: 0;
         left: 0;
+        width: 280px;
         height: 100vh;
-        width: 80%;
-        max-width: 300px;
-        transform: translateX(-100%); 
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: none;
+        background-color: white !important;
+        z-index: 1000 !important;
+        
+        /* Esta es la clave de la velocidad: 0.2s es ideal para móvil */
+        transition: transform 0.2s ease-in-out, visibility 0.2s;
+        
+        /* Forzamos que inicie cerrado */
+        transform: translateX(-100%);
+        visibility: hidden;
     }
-
+    
+    /* Estado abierto */
     #sidebar.open {
-        transform: translateX(0); 
-        box-shadow: 4px 0 25px rgba(0,0,0,0.15);
+        transform: translateX(0) !important;
+        visibility: visible !important;
     }
 
     /* Solo en móvil permitimos el overlay con .show */
@@ -234,5 +208,53 @@ button, .tab-btn, .sidebar-item { touch-action: manipulation; }
         display: block !important;
         opacity: 1;
         visibility: visible;
+    }
+}
+/* ========================================================== */
+/* MEJORAS VISUALES DEL BOTÓN DE INVENTARIO (PC Y MÓVIL)      */
+/* ========================================================== */
+
+/* Animación de entrada para que el usuario note el botón al cargar */
+#hamburger-btn {
+    animation: slideInLeft 0.5s ease-out;
+    position: relative; /* Necesario para que el letrero "Abrir menú" se ubique bien */
+}
+
+@keyframes slideInLeft {
+    from { 
+        opacity: 0; 
+        transform: translateX(-20px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateX(0); 
+    }
+}
+
+/* Efecto de letrero (Tooltip) solo en computadores */
+@media (min-width: 1024px) {
+    #hamburger-btn::after {
+        content: "Haz clic para ver equipos";
+        position: absolute;
+        bottom: -40px; /* Distancia hacia abajo del botón */
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1e293b;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: bold;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+        white-space: nowrap;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        z-index: 100;
+    }
+
+    /* Mostrar el letrero al pasar el mouse */
+    #hamburger-btn:hover::after {
+        opacity: 1;
     }
 }

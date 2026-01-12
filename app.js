@@ -4521,11 +4521,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.sidebarOverlay.addEventListener('click', window.closeSidebar);
     }
 
-    // Cerrar sidebar al seleccionar un item o al redimensionar (Solo en móviles)
-    document.addEventListener('click', (e) => {
-        if (e.target.closest('.sidebar-item')) {
-            if (window.innerWidth <= 768) window.closeSidebar();
+  // --- 2.1.5 CIERRE INTELIGENTE (SOLO ACCIONES EXTERNAS) ---
+    // Solo cerramos el sidebar si el usuario pulsa botones que lo sacan de la lista
+    const botonesQueCierran = [
+        'btn-qr-universal', 
+        'settings-btn', 
+        'notifications-btn', 
+        'sign-out-btn',
+        'close-sidebar-btn'
+    ];
+
+    botonesQueCierran.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', () => {
+                window.closeSidebar();
+            });
         }
+    });
+
+    // --- 2.1.6 NAVEGACIÓN DENTRO DEL SIDEBAR (NO CIERRA) ---
+    document.addEventListener('click', (e) => {
+        // Si el usuario hace clic en un ÍTEM de la lista (ej. un equipo específico)
+        if (e.target.closest('.sidebar-item')) {
+            // Cerramos solo en móviles para ver el detalle del equipo
+            if (window.innerWidth <= 1024) {
+                window.closeSidebar();
+            }
+        }
+        
+        // NOTA: Las pestañas (.tab-btn) ya NO disparan el cierre, 
+        // permitiendo que el usuario filtre sin que se esconda el menú.
     });
 
     // --- 2.2 FUNCIONES DE SEGURIDAD Y TICKETS ---
@@ -4582,7 +4608,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 2.4 CARGA RETARDADA DEL DASHBOARD ---
-    setTimeout(window.loadGlobalDashboard, 2000);
+    setTimeout(() => {
+        if (typeof window.loadGlobalDashboard === 'function') {
+            window.loadGlobalDashboard();
+        }
+    }, 2000);
 });
 
 // =============================================================
